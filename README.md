@@ -15,4 +15,4 @@ Catalyst 3550, Tailscale). Secrets, public IPs and credentials are removed.
 | `services/caddy/` | Caddy config for the portfolio site | Implemented |
 | `services/tailscale/` | Funnel setup and CI access policy | Implemented |
 | `scripts/rsync-wrapper.sh` | Restricts the deploy key to one rsync target | Implemented |
-| `network/` | Sanitized RV260 and Catalyst 3550 configs | Coming Soon|
+| `network/` | Sanitized RV260 and Catalyst 3550 configs | Coming soon |
