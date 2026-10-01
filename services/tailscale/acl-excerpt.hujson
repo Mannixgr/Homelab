@@ -1,0 +1,15 @@
+// Excerpt of the tailnet policy relevant to CI deploys (sanitized).
+// Source of truth is the Tailscale admin console.
+{
+	"tagOwners": {
+		"tag:ci": ["autogroup:admin"],
+	},
+
+	"grants": [
+		{
+			"src": ["tag:ci"],
+			"dst": ["192.168.1.20"],
+			"ip":  ["tcp:22"],
+		},
+	],
+}
