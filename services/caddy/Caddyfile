@@ -1,0 +1,6 @@
+# Static portfolio site, served from CT101 (Debian 12).
+# TLS is terminated upstream by Tailscale Funnel, so Caddy listens on plain :80.
+:80 {
+	root * /var/www/html
+	file_server
+}

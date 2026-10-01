@@ -1,0 +1,7 @@
+raw* .txt
+*.bak
+.env
+*.pem
+
+*.key
+
