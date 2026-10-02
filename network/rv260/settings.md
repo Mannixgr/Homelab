@@ -24,3 +24,16 @@ currently flat; segmentation into separate VLANs is planned, not built.
 - WAN: 1000 Mbps full duplex, private address from the Rogers gateway
 - LAN8: the only LAN port in use (100 Mbps full duplex); the rest of the
   lab connects through it
+
+## Firewall
+Default access rules only, for both IPv4 and IPv6. No custom rules.
+
+| Priority | Action | Service | Source | Destination |
+|----------|--------|---------|--------|-------------|
+| 201 | Allow | All traffic | LAN (VLAN) | WAN |
+| 202 | Deny | All traffic | WAN | LAN (VLAN) |
+
+Outbound traffic from the lab is allowed and unsolicited inbound traffic
+is denied. The public portfolio site does not use an inbound rule or port
+forward: it is published through Tailscale Funnel, which connects outbound
+(see `services/tailscale/funnel.md`).
