@@ -1,7 +1,8 @@
-raw* .txt
+raw*.txt
+*.raw
 *.bak
 .env
 *.pem
-
 *.key
-
+screenlog.*
+session.txt
