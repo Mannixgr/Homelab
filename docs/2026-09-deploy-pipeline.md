@@ -115,5 +115,7 @@ laptop before pushing it into CI.
 - The deploy user is restricted to rsync via `authorized_keys`, and the CI
   node is limited to SSH on one host through a Tailscale grant (see
   `services/tailscale/acl-excerpt.hujson`).
-- Planned: pin the container's SSH host key in the workflow instead of
-  `StrictHostKeyChecking=accept-new`.
+- Done since: the container's SSH host key is pinned in the workflow
+  (`DEPLOY_KNOWN_HOSTS` secret, `StrictHostKeyChecking=yes`) instead of
+  `accept-new`, and rsync uses `--delay-updates` so visitors never get new
+  HTML with old CSS/JS.

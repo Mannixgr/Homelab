@@ -6,3 +6,4 @@ raw*.txt
 *.key
 screenlog.*
 session.txt
+.DS_Store

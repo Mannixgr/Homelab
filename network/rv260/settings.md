@@ -25,6 +25,13 @@ currently flat; segmentation into separate VLANs is planned, not built.
 - LAN8: the only LAN port in use (100 Mbps full duplex); the rest of the
   lab connects through it
 
+## Static routes
+| Destination | Next hop | Interface | Purpose |
+|-------------|----------|-----------|---------|
+| 10.20.0.0/16 | 192.168.1.30 | VLAN 1 | AWS dev VPC, through the strongSwan VM's IPsec tunnels |
+
+Saved to the startup configuration (2026-10-24).
+
 ## Firewall
 Default access rules only, for both IPv4 and IPv6. No custom rules.
 
