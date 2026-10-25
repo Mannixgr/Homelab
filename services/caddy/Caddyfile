@@ -2,5 +2,10 @@
 # TLS is terminated upstream by Tailscale Funnel, so Caddy listens on plain :80.
 :80 {
 	root * /var/www/html
+	# Browsers keep files but check the ETag on each visit, so a deploy
+	# never pairs new HTML with a stale styles.css or site.js.
+	header Cache-Control "no-cache"
+	# Compress HTML/CSS/JS/SVG on the way out (roughly 70% smaller)
+	encode zstd gzip
 	file_server
 }
