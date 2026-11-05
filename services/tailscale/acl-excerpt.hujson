@@ -6,7 +6,7 @@
 		"tag:resale": ["autogroup:admin"],
 	},
 
-	// CT102 (resale dashboard) may use Funnel.
+	// CT104 (resale dashboard) may use Funnel.
 	"nodeAttrs": [
 		{
 			"target": ["tag:resale"],
@@ -15,12 +15,18 @@
 	],
 
 	// Deliberately NO grants with src tag:resale: default deny, so a
-	// compromised CT102 cannot reach any other tailnet node.
+	// compromised CT104 cannot reach any other tailnet node.
 
 	"grants": [
 		{
 			"src": ["tag:ci"],
 			"dst": ["192.168.1.20"],
+			"ip":  ["tcp:22"],
+		},
+		// CI deploys to the resale dashboard: SSH only, forced command on the CT.
+		{
+			"src": ["tag:ci"],
+			"dst": ["tag:resale"],
 			"ip":  ["tcp:22"],
 		},
 	],
