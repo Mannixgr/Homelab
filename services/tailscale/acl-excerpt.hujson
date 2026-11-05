@@ -2,8 +2,20 @@
 // Source of truth is the Tailscale admin console.
 {
 	"tagOwners": {
-		"tag:ci": ["autogroup:admin"],
+		"tag:ci":     ["autogroup:admin"],
+		"tag:resale": ["autogroup:admin"],
 	},
+
+	// CT102 (resale dashboard) may use Funnel.
+	"nodeAttrs": [
+		{
+			"target": ["tag:resale"],
+			"attr":   ["funnel"],
+		},
+	],
+
+	// Deliberately NO grants with src tag:resale: default deny, so a
+	// compromised CT102 cannot reach any other tailnet node.
 
 	"grants": [
 		{
