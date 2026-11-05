@@ -18,6 +18,21 @@ Status: written, not yet run. Every step below changes live infrastructure; do t
 
 Debian 12, unprivileged, 1 vCPU, 512 MB RAM, 8 GB disk, hostname `resale`, IP `192.168.1.21`. Use a **static** IP `192.168.1.21/24` (gateway `192.168.1.1`) in the Proxmox net config, not DHCP: the firewall blocks the gateway except for DNS, so DHCP would not work.
 
+Tailscale needs `/dev/net/tun`, which an unprivileged CT does not get by default. On the Proxmox host, add to `/etc/pve/lxc/102.conf` either (PVE 8.1 or later):
+
+```
+dev0: /dev/net/tun
+```
+
+or (older PVE):
+
+```
+lxc.cgroup2.devices.allow: c 10:200 rwm
+lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file
+```
+
+Then `pct reboot 102` (a full restart; the device is only added at start) and check `ls -l /dev/net/tun` inside the CT.
+
 ## 3. Proxmox firewall (CT102, firewall on)
 
 - IN: drop everything except tcp/22 from `<mac-lan-ip>`.
@@ -32,10 +47,12 @@ Why: it is a public login surface, so a compromise must not reach the LAN, the s
 ## 4. Base hardening (inside CT102)
 
 - SSH key-only, `PermitRootLogin no`, a non-root `<admin>` user.
-- `apt install unattended-upgrades sqlite3 awscli rsync curl`. Debian 12 ships Python 3.11 and the app needs 3.12, so install it with uv (step 6).
+- `apt install unattended-upgrades sqlite3 awscli curl`. Debian 12 ships Python 3.11 and the app needs 3.12, so install it with uv (step 6).
 - `useradd --system --home /var/lib/resale --shell /usr/sbin/nologin resale`; `install -d -m 0700 -o resale /var/lib/resale /var/lib/resale/receipts`; `install -d -m 0700 /var/backups/resale`.
 
 ## 5. Tailscale and Funnel
+
+Check step 2's `/dev/net/tun` is present first; without it `tailscaled` fails to start.
 
 1. In the Tailscale admin, add `tag:resale` to `tagOwners` and a `nodeAttrs` entry giving it `funnel` (see `services/tailscale/acl-excerpt.hujson`). Add **no** grants with `src` `tag:resale`: default deny means a compromised CT102 cannot reach any other tailnet node. Enable HTTPS (`services/tailscale/funnel.md`). Do not widen the `tag:ci` ACL.
 2. Install Tailscale on CT102 and join as the tag: `tailscale up --hostname=resale --advertise-tags=tag:resale`. Approve in the admin console if asked, and check the node shows `tag:resale`.
@@ -43,21 +60,32 @@ Why: it is a public login surface, so a compromise must not reach the LAN, the s
 
 ## 6. Deploy
 
-From the Mac, in the app repo:
+`/opt/resale` stays root-owned and read-only to `resale`; the service writes only `/var/lib/resale`. Once, on CT102:
 
 ```
-rsync -av --delete --exclude .venv --exclude tests --exclude web-test ./ <admin>@192.168.1.21:/opt/resale/
+sudo install -d -m 0755 -o root -g root /opt/resale
 ```
 
-On CT102:
+From the Mac, in the app repo, ship the committed tree only (no `.git`, `.superpowers`, `.venv` or caches):
+
+```
+git archive HEAD | ssh <admin>@192.168.1.21 'sudo tar -x --no-same-owner -C /opt/resale'
+```
+
+Redeploys use the same command. `tar -x` overwrites but does not delete, so after removing a file from the repo, delete it from `/opt/resale` too.
+
+On CT102 (first deploy; after a redeploy, rerun only the `uv pip install` line if `requirements.lock` changed, then `systemctl restart resale`):
 
 ```
 curl -LsSf https://astral.sh/uv/install.sh | sh   # or a Debian package if one exists
+# root's default Python dir is under /root, which the resale user can't read and ProtectHome=yes hides
+export UV_PYTHON_INSTALL_DIR=/opt/uv-python
 uv python install 3.12
+chmod -R a+rX /opt/uv-python
 uv venv --python 3.12 /opt/resale/.venv
 uv pip install --python /opt/resale/.venv --require-hashes -r /opt/resale/requirements.lock
-chown -R resale: /opt/resale   # or leave root-owned and read-only; the service only writes /var/lib/resale
-cp deploy/resale.service deploy/resale-backup.service deploy/resale-backup.timer /etc/systemd/system/
+runuser -u resale -- /opt/resale/.venv/bin/python -V   # must print Python 3.12.x
+cp /opt/resale/deploy/resale.service /opt/resale/deploy/resale-backup.service /opt/resale/deploy/resale-backup.timer /etc/systemd/system/
 ```
 
 Write `/etc/resale.env` (`chmod 0600`, owner root, never in git):
@@ -67,6 +95,7 @@ RESALE_DB=/var/lib/resale/resale.db
 RESALE_RECEIPTS=/var/lib/resale/receipts
 RESALE_ORIGIN=https://resale.<tailnet>.ts.net
 BACKUP_BUCKET=<bucket name from terraform output>
+AWS_DEFAULT_REGION=ca-central-1
 ```
 
 Then `systemctl daemon-reload && systemctl enable --now resale.service resale-backup.timer`. Create the first admin invite as root, running as the `resale` user with the env loaded:
