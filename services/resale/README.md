@@ -16,25 +16,29 @@ Status: written, not yet run. Every step below changes live infrastructure; do t
 
 ## 2. Create CT102 (Proxmox, `192.168.1.50`)
 
-Debian 12, unprivileged, 1 vCPU, 512 MB RAM, 8 GB disk, hostname `resale`, IP `192.168.1.21`. Add a DHCP reservation on the RV260 (or a static IP) so the address never moves.
+Debian 12, unprivileged, 1 vCPU, 512 MB RAM, 8 GB disk, hostname `resale`, IP `192.168.1.21`. Use a **static** IP `192.168.1.21/24` (gateway `192.168.1.1`) in the Proxmox net config, not DHCP: the firewall blocks the gateway except for DNS, so DHCP would not work.
 
 ## 3. Proxmox firewall (CT102, firewall on)
 
 - IN: drop everything except tcp/22 from `<mac-lan-ip>`.
-- OUT: allow udp/tcp 53 to the gateway; drop `192.168.1.0/24` and `10.0.0.0/24`; allow everything else.
+- OUT, an allow-list, in this order:
+  1. allow udp/tcp 53 to the gateway
+  2. drop `192.168.1.0/24`, `10.0.0.0/24`, `10.20.0.0/16`
+  3. allow tcp 80, tcp 443, udp 41641, udp 3478 (web, HTTPS, Tailscale)
+  4. drop all other outbound
 
-Why: it is a public login surface, so a compromise must not reach the LAN, the strongSwan VM or the portfolio LXC. Put the allow-DNS rule above the drops.
+Why: it is a public login surface, so a compromise must not reach the LAN, the strongSwan VM or the portfolio LXC. Keep the rules in that order.
 
 ## 4. Base hardening (inside CT102)
 
 - SSH key-only, `PermitRootLogin no`, a non-root `<admin>` user.
-- `apt install unattended-upgrades sqlite3 awscli python3-venv rsync`.
+- `apt install unattended-upgrades sqlite3 awscli rsync curl`. Debian 12 ships Python 3.11 and the app needs 3.12, so install it with uv (step 6).
 - `useradd --system --home /var/lib/resale --shell /usr/sbin/nologin resale`; `install -d -m 0700 -o resale /var/lib/resale /var/lib/resale/receipts`; `install -d -m 0700 /var/backups/resale`.
 
 ## 5. Tailscale and Funnel
 
-1. Install Tailscale, `tailscale up --hostname=resale`.
-2. In the Tailscale admin, enable HTTPS and give the node the Funnel attribute (see `services/tailscale/funnel.md`). Do not widen the `tag:ci` ACL.
+1. In the Tailscale admin, add `tag:resale` to `tagOwners` and a `nodeAttrs` entry giving it `funnel` (see `services/tailscale/acl-excerpt.hujson`). Add **no** grants with `src` `tag:resale`: default deny means a compromised CT102 cannot reach any other tailnet node. Enable HTTPS (`services/tailscale/funnel.md`). Do not widen the `tag:ci` ACL.
+2. Install Tailscale on CT102 and join as the tag: `tailscale up --hostname=resale --advertise-tags=tag:resale`. Approve in the admin console if asked, and check the node shows `tag:resale`.
 3. `tailscale funnel --bg 8000`. The URL is `https://resale.<tailnet>.ts.net`.
 
 ## 6. Deploy
@@ -48,7 +52,11 @@ rsync -av --delete --exclude .venv --exclude tests --exclude web-test ./ <admin>
 On CT102:
 
 ```
-cd /opt/resale && python3 -m venv .venv && .venv/bin/pip install --require-hashes -r requirements.lock
+curl -LsSf https://astral.sh/uv/install.sh | sh   # or a Debian package if one exists
+uv python install 3.12
+uv venv --python 3.12 /opt/resale/.venv
+uv pip install --python /opt/resale/.venv --require-hashes -r /opt/resale/requirements.lock
+chown -R resale: /opt/resale   # or leave root-owned and read-only; the service only writes /var/lib/resale
 cp deploy/resale.service deploy/resale-backup.service deploy/resale-backup.timer /etc/systemd/system/
 ```
 
@@ -61,8 +69,13 @@ RESALE_ORIGIN=https://resale.<tailnet>.ts.net
 BACKUP_BUCKET=<bucket name from terraform output>
 ```
 
-Then `systemctl daemon-reload && systemctl enable --now resale.service resale-backup.timer`. Create the first admin invite as the `resale` user with the env loaded:
-`python -m app.cli invite --name Mannix --share 2500 --admin`, and open the link.
+Then `systemctl daemon-reload && systemctl enable --now resale.service resale-backup.timer`. Create the first admin invite as root, running as the `resale` user with the env loaded:
+
+```
+cd /opt/resale && sudo bash -c 'set -a; . /etc/resale.env; exec runuser -u resale -- /opt/resale/.venv/bin/python -m app.cli invite --name Mannix --share 2500 --admin'
+```
+
+Open the printed link.
 
 ## 7. Backups
 
