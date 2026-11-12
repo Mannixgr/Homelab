@@ -6,7 +6,7 @@ Invite-only web app (FastAPI + SQLite, receipts on disk) in its own unprivileged
 Internet -> Funnel 443 -> CT104 192.168.1.21 -> 127.0.0.1:8000 (uvicorn)
 ```
 
-Status: deployed 2026-11-05 (backups pending). Every step below changes live infrastructure; do them yourself, in order. `<tailnet>` is a placeholder. CT104 is managed from the Proxmox host shell (`pct enter 104`), never by SSH from the LAN.
+Status: deployed 2026-11-05. Nightly S3 backup running and restore drill passed 2026-11-12 (database only: no receipts uploaded yet, repeat the receipt check after the first one). Every step below changes live infrastructure; do them yourself, in order. `<tailnet>` is a placeholder. CT104 is managed from the Proxmox host shell (`pct enter 104`), never by SSH from the LAN.
 
 ## 1. Before the first deploy (in the app repo)
 
@@ -138,9 +138,10 @@ One-time setup:
 1. In `infra/`, copy `backend.hcl.example` to `backend.hcl`, fill in the state bucket, then `terraform init -backend-config=backend.hcl`, `terraform plan`, and `terraform apply -var bucket_name=<unique name>` (you apply; the bucket and a put-only IAM user are created).
 2. Create the IAM user's access key in the console or CLI (outside Terraform, so it stays out of state). Put it in `/root/.aws/credentials` on CT104 (`0600`), readable by root only. The web service does not see it.
 3. Run `systemctl start resale-backup.service` once and check the two objects under `backups/` in the bucket.
-4. Add a Proxmox `vzdump` schedule for CT104.
+4. Add a Proxmox `vzdump` schedule for CT104: Datacenter → Backup → Add, `local` storage, daily 02:00, snapshot mode, ZSTD, Keep Last 7. Run it once and check `TASK OK`. These copies share CT104's disk, so S3 is the only copy that survives a dead disk.
+5. Check `systemctl list-timers resale-backup.timer` shows the next run. If `systemctl start` says the unit is not found, step 6's `cp` of the backup units was skipped; if the job fails, check `BACKUP_BUCKET` and `AWS_DEFAULT_REGION` in `/etc/resale.env`.
 
-The nightly timer runs 03:30, keeps 14 local copies, S3 expires objects after 30 days.
+The nightly timer runs 03:30 in CT104's time zone, UTC (22:30 or 23:30 Toronto), keeps 14 local copies, S3 expires objects after 30 days.
 
 ## 8. Verify
 
@@ -152,4 +153,4 @@ The nightly timer runs 03:30, keeps 14 local copies, S3 expires objects after 30
 
 ## 9. Restore drill
 
-Download a `db-*.db` and `receipts-*.tar.gz` from S3 (with your admin profile, since the backup user cannot read), extract the receipts, and start a local run with `RESALE_DB` and `RESALE_RECEIPTS` pointing at them (see the app README). Log in and open a receipt. Repeat after any change to the backup path.
+On the Mac, download a `db-*.db` and `receipts-*.tar.gz` from S3 with your admin profile (`aws s3 cp s3://<bucket>/backups/<file> .`). The same command on CT104 returns 403, which is correct: the backup user cannot read. Check out `main` (what CT104 runs), extract the receipts, and start a local run with `RESALE_DB` and `RESALE_RECEIPTS` pointing at them (see the app README). Log in and open a receipt. Repeat after any change to the backup path.
