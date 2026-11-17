@@ -9,7 +9,7 @@ Catalyst 3550, Tailscale, strongSwan) and its site-to-site VPN to AWS. Secrets, 
 
 | Path | Contents | Status |
 |------|----------|--------|
-| Network diagram (above) | Lives in the `mannix-portfolio` repo, linked here so one edit updates every README | Implemented, VLAN zones planned |
+| Network diagram (above) | Lives in the `mannix-portfolio` repo, linked here so one edit updates every README | Implemented, DMZ VLAN planned |
 | `docs/2026-09-deploy-pipeline.md` | Write-up: what broke building the deploy pipeline | Done |
 | `ci/deploy.yml` | GitHub Actions deploy workflow (reference copy) | Implemented |
 | `services/caddy/` | Caddy config for the portfolio site | Implemented |
